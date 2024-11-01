@@ -7,9 +7,6 @@
 
 set -e
 
-DEVICE=socrates
-VENDOR=xiaomi
-
 # Load extract_utils and do some sanity checks
 MY_DIR="${BASH_SOURCE%/*}"
 if [[ ! -d "${MY_DIR}" ]]; then MY_DIR="${PWD}"; fi
@@ -32,15 +29,23 @@ source "${HELPER}"
 # Default to sanitizing the vendor folder before extraction
 CLEAN_VENDOR=true
 
+ONLY_COMMON=true
 ONLY_FIRMWARE=
+ONLY_TARGET=
 KANG=
 SECTION=
 CARRIER_SKIP_FILES=()
 
 while [ "${#}" -gt 0 ]; do
     case "${1}" in
+        --only-common)
+            ONLY_COMMON=true
+            ;;
         --only-firmware)
             ONLY_FIRMWARE=true
+            ;;
+        --only-target)
+            ONLY_TARGET=true
             ;;
         -n | --no-cleanup)
             CLEAN_VENDOR=false
@@ -66,10 +71,6 @@ fi
 
 function blob_fixup() {
     case "${1}" in
-        odm/etc/camera/*.xml)
-            [ "$2" = "" ] && return 0
-            sed -i s/xml=version/xml\ version/g "${2}"
-            ;;
         vendor/bin/hw/android.hardware.security.keymint-service-qti)
             [ "$2" = "" ] && return 0
             "${PATCHELF}" --add-needed "android.hardware.security.rkp-V3-ndk.so" "${2}"
@@ -108,19 +109,25 @@ function blob_fixup_dry() {
     blob_fixup "$1" ""
 }
 
-function prepare_firmware() {
-    :
-}
+if [ -z "${ONLY_FIRMWARE}" ] && [ -z "${ONLY_TARGET}" ]; then
+    # Initialize the helper for common device
+    setup_vendor "${DEVICE_COMMON}" "${VENDOR_COMMON:-$VENDOR}" "${ANDROID_ROOT}" true "${CLEAN_VENDOR}"
 
-# Initialize the helper
-setup_vendor "${DEVICE}" "${VENDOR}" "${ANDROID_ROOT}" false "${CLEAN_VENDOR}"
-
-if [ -z "${ONLY_FIRMWARE}" ]; then
     extract "${MY_DIR}/proprietary-files.txt" "${SRC}" "${KANG}" --section "${SECTION}"
 fi
 
-if [ -z "${SECTION}" ]; then
-    extract_firmware "${MY_DIR}/proprietary-firmware.txt" "${SRC}"
+if [ -z "${ONLY_COMMON}" ] && [ -s "${MY_DIR}/../../${VENDOR}/${DEVICE}/proprietary-files.txt" ]; then
+    # Reinitialize the helper for device
+    source "${MY_DIR}/../../${VENDOR}/${DEVICE}/extract-files.sh"
+    setup_vendor "${DEVICE}" "${VENDOR}" "${ANDROID_ROOT}" false "${CLEAN_VENDOR}"
+
+    if [ -z "${ONLY_FIRMWARE}" ]; then
+        extract "${MY_DIR}/../../${VENDOR}/${DEVICE}/proprietary-files.txt" "${SRC}" "${KANG}" --section "${SECTION}"
+    fi
+
+    if [ -z "${SECTION}" ] && [ -f "${MY_DIR}/../../${VENDOR}/${DEVICE}/proprietary-firmware.txt" ]; then
+        extract_firmware "${MY_DIR}/../../${VENDOR}/${DEVICE}/proprietary-firmware.txt" "${SRC}"
+    fi
 fi
 
 "${MY_DIR}/setup-makefiles.sh"
