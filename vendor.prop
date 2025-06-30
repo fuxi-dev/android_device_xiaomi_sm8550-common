@@ -312,6 +312,11 @@ persist.vendor.radio.enableadvancedscan=true
 # RCS
 persist.vendor.rcs.singlereg.feature=1
 
+# Sensors
+ro.vendor.sensors.xiaomi.double_tap=true
+ro.vendor.sensors.xiaomi.single_tap=true
+ro.vendor.sensors.xiaomi.udfps=true
+
 # Storage
 external_storage.projid.enabled=1
 external_storage.casefold.enabled=1
